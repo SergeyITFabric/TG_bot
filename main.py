@@ -2,7 +2,9 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
 # ВСТАВЬ СЮДА СВОЙ ТОКЕН
-TOKEN = ""
+import os
+TOKEN = os.getenv("BOT_TOKEN")
+
 
 # Главное меню
 def get_main_menu():
