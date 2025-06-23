@@ -5,14 +5,12 @@ from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Flask сервер
 web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return '✅ Telegram-бот работает!'
+    return '✅ Telegram-бот работает через Flask + PTB'
 
-# Главное меню
 def get_main_menu():
     keyboard = [
         [InlineKeyboardButton("📨 Разместить Заказ", callback_data='create_order')],
@@ -24,39 +22,38 @@ def get_main_menu():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Добро пожаловать! Выберите пункт меню:", reply_markup=get_main_menu())
 
-# Кнопки
 async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.edit_message_text(f"Вы выбрали: {query.data}")
 
-# Асинхронный запуск Telegram-бота (НЕ через asyncio.run)
 async def run_bot():
     token = os.getenv("BOT_TOKEN")
     if not token:
-        print("❌ BOT_TOKEN не указан.")
+        print("❌ Не задан BOT_TOKEN")
         return
+
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_menu))
-    print("🤖 Telegram-бот запущен.")
-    await app.run_polling()
 
-# Flask в потоке
+    print("🤖 Инициализация Telegram-бота...")
+
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port)
 
-# Точка входа
 if __name__ == '__main__':
-    # Стартуем Flask отдельно
+    # Flask в фоне
     threading.Thread(target=run_flask).start()
 
-    # Используем уже активный loop и запускаем бот в фоне
-    loop = asyncio.get_event_loop()
-    loop.create_task(run_bot())
-    loop.run_forever()
+    # Telegram-бот внутри текущего loop
+    asyncio.get_event_loop().create_task(run_bot())
+    asyncio.get_event_loop().run_forever()
