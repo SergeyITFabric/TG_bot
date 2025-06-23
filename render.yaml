@@ -1,8 +1,11 @@
 services:
   - type: web
     name: telegram-bot
-    runtime: python
+    env: python
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python main.py
     autoDeploy: true
+    environment:
+      - key: PYTHON_VERSION
+        value: 3.11.9
