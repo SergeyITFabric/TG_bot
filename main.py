@@ -5,12 +5,12 @@ from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Flask для Render
+# Flask сервер
 web_app = Flask(__name__)
 
 @web_app.route('/')
 def home():
-    return '✅ Flask работает. Telegram-бот тоже.'
+    return '✅ Telegram-бот работает!'
 
 # Главное меню
 def get_main_menu():
@@ -24,36 +24,39 @@ def get_main_menu():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# Обработка /start
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Добро пожаловать! Выберите пункт меню:", reply_markup=get_main_menu())
 
-# Обработка кнопок
+# Кнопки
 async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.edit_message_text(f"Вы выбрали: {query.data}")
 
-# Telegram бот
+# Асинхронный запуск Telegram-бота (НЕ через asyncio.run)
 async def run_bot():
     token = os.getenv("BOT_TOKEN")
     if not token:
-        print("❌ Не задан BOT_TOKEN")
+        print("❌ BOT_TOKEN не указан.")
         return
-
     app = Application.builder().token(token).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(handle_menu))
-
-    print("🤖 Telegram-бот запущен...")
+    print("🤖 Telegram-бот запущен.")
     await app.run_polling()
 
-# Flask-сервер в фоновом потоке
+# Flask в потоке
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     web_app.run(host="0.0.0.0", port=port)
 
-# Старт
+# Точка входа
 if __name__ == '__main__':
+    # Стартуем Flask отдельно
     threading.Thread(target=run_flask).start()
-    asyncio.run(run_bot())
+
+    # Используем уже активный loop и запускаем бот в фоне
+    loop = asyncio.get_event_loop()
+    loop.create_task(run_bot())
+    loop.run_forever()
