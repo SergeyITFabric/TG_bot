@@ -1,18 +1,15 @@
 import os
-import threading
+import asyncio
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
 
-# Получаем токен из переменной окружения
-TOKEN = os.getenv("BOT_TOKEN")
-
 # Инициализация Flask
-app_web = Flask(__name__)
+web_app = Flask(__name__)
 
-@app_web.route("/")
+@web_app.route('/')
 def home():
-    return "✅ Telegram бот работает на Render!"
+    return '✅ Бот работает. Render видит порт.'
 
 # Главное меню
 def get_main_menu():
@@ -26,14 +23,14 @@ def get_main_menu():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# Обработка команды /start
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Добро пожаловать! Выберите пункт меню:",
         reply_markup=get_main_menu()
     )
 
-# Обработка нажатий
+# Обработка нажатий на кнопки
 async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -54,18 +51,23 @@ async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == 'support':
         await query.edit_message_text("👥 Связь с поддержкой: @your_support_contact")
 
-# Telegram-бот в отдельном потоке
-def run_telegram_bot():
-    application = Application.builder().token(TOKEN).build()
+# Асинхронный запуск Telegram-бота
+async def run_bot():
+    token = os.getenv("BOT_TOKEN")
+    application = Application.builder().token(token).build()
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(handle_menu))
-    print("🤖 Бот запущен...")
-    application.run_polling()
+    print("🤖 Бот запущен")
+    await application.run_polling()
+
+# Запуск Flask + Telegram параллельно
+def run():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.create_task(run_bot())
+
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
 
 if __name__ == '__main__':
-    # Запускаем телеграм-бота в отдельном потоке
-    threading.Thread(target=run_telegram_bot).start()
-
-    # Flask Web Server (Render требует открытый порт)
-    port = int(os.environ.get("PORT", 10000))  # Render подставляет PORT
-    app_web.run(host="0.0.0.0", port=port)
+    run()
