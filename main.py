@@ -1,185 +1,191 @@
-
 import logging
 import os
 from telegram import (
     Update,
-    InlineKeyboardMarkup,
     InlineKeyboardButton,
-    ReplyKeyboardRemove
+    InlineKeyboardMarkup,
+    ReplyKeyboardRemove,
 )
 from telegram.ext import (
     Application,
     CommandHandler,
-    MessageHandler,
     CallbackQueryHandler,
-    ConversationHandler,
+    MessageHandler,
     filters,
-    ContextTypes
+    ConversationHandler,
+    ContextTypes,
 )
 from flask import Flask
 
-# Включаем логирование
+# Настройки
+TOKEN = os.getenv('BOT_TOKEN')
+CHANNEL_USERNAME = os.getenv('CHANNEL_USERNAME')  # Пример: '@free_time_money'
+
+# Категории для выбора
+CATEGORIES = [
+    "Сайты", "IT разработка", "Нейросети",
+    "Дизайн", "Маркетинг", "Проектирование",
+    "Тендеры", "Юристы"
+]
+
+# Состояния для ConversationHandler
+(
+    TITLE,
+    DESCRIPTION,
+    CATEGORY,
+    BUDGET,
+    CITY
+) = range(5)
+
+# Веб-сервер Flask для поддержки Render
+app_web = Flask(__name__)
+
+
+@app_web.route('/')
+def home():
+    return "Бот работает!"
+
+
+# Логирование
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Переменные окружения
-TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_USERNAME = os.getenv("CHANNEL_USERNAME")
 
-# Состояния для ConversationHandler
-TITLE, DESCRIPTION, CATEGORY, BUDGET, CITY = range(5)
-
-# Flask
-app_flask = Flask(__name__)
-
-@app_flask.route("/")
-def index():
-    return "Бот работает."
-
-# Меню кнопок
-def get_main_menu():
-    keyboard = [
-        [InlineKeyboardButton("📝 Разместить заказ", callback_data="create_order")],
-        [InlineKeyboardButton("📜 Правила", callback_data="rules")],
-        [InlineKeyboardButton("ℹ️ О сервисе", callback_data="about")]
-    ]
-    return InlineKeyboardMarkup(keyboard)
-
-# Старт
+# Функция старта бота
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    args = context.args
-    if args and args[0] == "create_order":
-        await update.message.reply_text(
-            "Вы выбрали размещение заказа. Введите заголовок заказа:",
-            reply_markup=ReplyKeyboardRemove()
-        )
-        return TITLE
+    keyboard = [
+        [InlineKeyboardButton("➕ Разместить заказ", callback_data="create_order")],
+        [InlineKeyboardButton("ℹ️ Правила", callback_data="rules")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
-        "Добро пожаловать! Выберите пункт меню:",
-        reply_markup=get_main_menu()
+        "👋 Добро пожаловать! Выберите действие:",
+        reply_markup=reply_markup
     )
-    return ConversationHandler.END
 
-# Обработка меню
-async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+# Обработка кнопок меню
+async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == 'create_order':
-        await query.message.reply_text(
-            "Введите заголовок заказа:",
-            reply_markup=ReplyKeyboardRemove()
-        )
+    if query.data == "create_order":
+        await query.message.reply_text("Введите заголовок заказа:", reply_markup=ReplyKeyboardRemove())
         return TITLE
 
-    await query.edit_message_text(
-        f"Вы выбрали: {query.data}",
-        reply_markup=get_main_menu()
-    )
-    return ConversationHandler.END
+    if query.data == "rules":
+        await query.message.reply_text(
+            "Правила:\n\n"
+            "1. Запрещено публиковать мошеннические заказы.\n"
+            "2. Все сделки происходят напрямую между заказчиком и исполнителем.\n"
+            "3. Биржа не несёт ответственности за результат сделки."
+        )
+        return ConversationHandler.END
 
-# Сбор данных заказа
-async def get_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+# Этапы ввода данных
+async def title_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["title"] = update.message.text
-    await update.message.reply_text("Введите описание заказа:")
+    await update.message.reply_text("Опишите задание подробнее:")
     return DESCRIPTION
 
-async def get_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def description_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["description"] = update.message.text
-    await update.message.reply_text("Введите категорию (Сайты, IT разработка, Нейросети, Дизайн, Маркетинг, Проектирование, Тендеры, Юристы):")
+
+    keyboard = [
+        [InlineKeyboardButton(cat, callback_data=cat)] for cat in CATEGORIES
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    await update.message.reply_text(
+        "Выберите категорию:",
+        reply_markup=reply_markup
+    )
     return CATEGORY
 
-async def get_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["category"] = update.message.text
-    await update.message.reply_text("Введите бюджет / часы работы:")
+
+async def category_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+    context.user_data["category"] = query.data
+    await query.message.reply_text("Укажите бюджет или количество часов работы:")
     return BUDGET
 
-async def get_budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def budget_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["budget"] = update.message.text
-    await update.message.reply_text("Введите город:")
+    await update.message.reply_text("Укажите город:")
     return CITY
 
-async def get_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def city_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["city"] = update.message.text
 
-    order_text = (
-        f"📝 Новый заказ!
+    title = context.user_data["title"]
+    description = context.user_data["description"]
+    category = context.user_data["category"]
+    budget = context.user_data["budget"]
+    city = context.user_data["city"]
 
-"
-        f"**{context.user_data['title']}**
-
-"
-        f"{context.user_data['description']}
-
-"
-        f"🏷 Категория: {context.user_data['category']}
-"
-        f"💰 Бюджет: {context.user_data['budget']}
-"
-        f"📍 Город: {context.user_data['city']}"
+    text = (
+        f"📝 Новый заказ!\n\n"
+        f"<b>{title}</b>\n\n"
+        f"{description}\n\n"
+        f"💼 Категория: #{category.replace(' ', '_')}\n"
+        f"📍 Город: #{city.replace(' ', '_')}\n"
+        f"💰 Бюджет / Часы работы: {budget}"
     )
-
-    await update.message.reply_text("Ваш заказ опубликован!")
 
     await context.bot.send_message(
         chat_id=CHANNEL_USERNAME,
-        text=order_text,
-        parse_mode="Markdown"
+        text=text,
+        parse_mode="HTML"
     )
 
+    await update.message.reply_text("✅ Ваш заказ опубликован!")
     return ConversationHandler.END
 
+
+# Отмена
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Действие отменено.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
-# Публикация закрепленного поста
-async def post_menu_to_channel(application):
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("📝 Разместить заказ", url="https://t.me/FTM_menu_user_Bot?start=create_order")],
-        [InlineKeyboardButton("📜 Правила", url="https://t.me/FTM_menu_user_Bot")],
-        [InlineKeyboardButton("ℹ️ О сервисе", url="https://t.me/FTM_menu_user_Bot")]
-    ])
-    message = await application.bot.send_message(
-        chat_id=CHANNEL_USERNAME,
-        text="Это закрепленное сообщение. Выберите действие:",
-        reply_markup=keyboard
-    )
-    await application.bot.pin_chat_message(
-        chat_id=CHANNEL_USERNAME,
-        message_id=message.message_id,
-        disable_notification=True
-    )
 
-# Основной запуск
-async def run_bot():
+# Запуск бота
+async def main():
     application = Application.builder().token(TOKEN).build()
 
-    application.add_handler(CommandHandler("start", start))
-
+    # Хендлер для формы заказа
     order_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(handle_menu, pattern="^create_order$")],
+        entry_points=[
+            CallbackQueryHandler(menu_handler, pattern="^create_order$")
+        ],
         states={
-            TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_title)],
-            DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_description)],
-            CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_category)],
-            BUDGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_budget)],
-            CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, get_city)],
+            TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, title_handler)],
+            DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, description_handler)],
+            CATEGORY: [CallbackQueryHandler(category_handler)],
+            BUDGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, budget_handler)],
+            CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, city_handler)],
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CallbackQueryHandler(menu_handler, pattern="^rules$"))
     application.add_handler(order_conv)
-    application.add_handler(CallbackQueryHandler(handle_menu))
 
-    await post_menu_to_channel(application)
     await application.run_polling()
+
 
 if __name__ == "__main__":
     import asyncio
+
     loop = asyncio.get_event_loop()
-    loop.create_task(run_bot())
-    app_flask.run(host="0.0.0.0", port=10000)
+    loop.create_task(main())
+    app_web.run(host="0.0.0.0", port=10000)
