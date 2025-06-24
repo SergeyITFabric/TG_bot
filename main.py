@@ -43,4 +43,38 @@ async def post_menu_to_channel(application):
 
     keyboard = get_main_menu()
     message = await application.bot.send_message(
-        chat_id=channe_
+        chat_id=channel_username,
+        text="👇 Выберите действие:",
+        reply_markup=keyboard
+    )
+    await application.bot.pin_chat_message(chat_id=channel_username, message_id=message.message_id, disable_notification=True)
+
+# Запуск Telegram-бота
+async def run_bot():
+    token = os.getenv("BOT_TOKEN")
+    if not token:
+        print("❌ Не задан BOT_TOKEN")
+        return
+
+    app = Application.builder().token(token).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CallbackQueryHandler(handle_menu))
+
+    print("🤖 Инициализация Telegram-бота...")
+
+    await app.initialize()
+    await app.start()
+    await post_menu_to_channel(app)
+    await app.updater.start_polling()
+
+# Запуск Flask
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
+
+# Главный вход
+if __name__ == '__main__':
+    threading.Thread(target=run_flask).start()
+    loop = asyncio.get_event_loop()
+    loop.create_task(run_bot())
+    loop.run_forever()
