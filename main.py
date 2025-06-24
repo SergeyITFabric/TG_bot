@@ -44,7 +44,7 @@ async def post_menu_to_channel(application):
     keyboard = get_main_menu()
     message = await application.bot.send_message(
         chat_id=channel_username,
-        text="👇 Выберите действие:",
+        text="Это закрепленное приветсвенное сообщение оно сверху. И под ним должны быть кнопки меню.👇 Выберите действие:",
         reply_markup=keyboard
     )
     await application.bot.pin_chat_message(chat_id=channel_username, message_id=message.message_id, disable_notification=True)
