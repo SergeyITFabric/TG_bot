@@ -15,10 +15,10 @@ def get_main_menu():
     keyboard = [
         [InlineKeyboardButton("📝 Разместить Заказ", callback_data='create_order')],
         [InlineKeyboardButton("🔍 Найти Заказ. Категории", callback_data='find_order')],
-        [InlineKeyboardButton("🏗 Ресурсы: Аренда. Прокат. Рабочие.", callback_data='resources')],
-        [InlineKeyboardButton("💵 Реферальная программа", callback_data='referral')],
+        [InlineKeyboardButton("🛠 Ресурсы: Аренда. Прокат. Рабочие.", callback_data='resources')],
+        [InlineKeyboardButton("🤝 Реферальная программа", callback_data='referral')],
         [InlineKeyboardButton("❓ Вопросы и ответы", callback_data='faq')],
-        [InlineKeyboardButton("🤓 Служба заботы", callback_data='support')],
+        [InlineKeyboardButton("❤️ Служба заботы", callback_data='support')],
     ]
     return InlineKeyboardMarkup(keyboard)
 
