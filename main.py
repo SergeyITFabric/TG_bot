@@ -17,7 +17,7 @@ from telegram.ext import (
 )
 from flask import Flask
 
-TOKEN = BOT_TOKEN
+TOKEN = '7642643259:AAErZAsn4qCzaRkArbuegI8EizGE8yRv1VU'  
 CHANNEL_USERNAME = '@free_time_money'
 
 WELCOME_TEXT = "👋 Добро пожаловать! Выберите действие:"
