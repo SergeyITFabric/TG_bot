@@ -17,9 +17,9 @@ from telegram.ext import (
     filters,
 )
 
-TOKEN = 'YOUR_BOT_TOKEN'
-CHANNEL_USERNAME = '@YOUR_CHANNEL_USERNAME'
-WEBHOOK_URL = 'https://YOUR_RENDER_URL.onrender.com/webhook'
+TOKEN = '7642643259:AAErZAsn4qCzaRkArbuegI8EizGE8yRv1VU'
+CHANNEL_USERNAME = '@free_time_money'
+WEBHOOK_URL = 'https://tg-bot-hvfu.onrender.com'
 
 WELCOME_TEXT = "👋 Добро пожаловать! Выберите действие:"
 CATEGORIES = ['Сайты', 'IT разработка', 'Нейросети', 'Дизайн', 'Маркетинг', 'Проектирование', 'Тендеры', 'Юристы']
