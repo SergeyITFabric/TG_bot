@@ -13,7 +13,7 @@ from telegram.ext import (
 from fastapi import FastAPI, Request
 import uvicorn
 
-TOKEN = "ВАШ_ТОКЕН_БОТА"
+TOKEN = "7642643259:AAErZAsn4qCzaRkArbuegI8EizGE8yRv1VU"
 CHANNEL_ID = "@free_time_money"
 
 logging.basicConfig(level=logging.INFO)
