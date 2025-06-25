@@ -1,5 +1,4 @@
 import logging
-from flask import Flask, request
 from telegram import (
     Update,
     InlineKeyboardButton,
@@ -16,10 +15,10 @@ from telegram.ext import (
     ConversationHandler,
     filters,
 )
+from flask import Flask
 
-TOKEN = '7642643259:AAErZAsn4qCzaRkArbuegI8EizGE8yRv1VU'
+TOKEN = BOT_TOKEN
 CHANNEL_USERNAME = '@free_time_money'
-WEBHOOK_URL = 'https://tg-bot-hvfu.onrender.com'
 
 WELCOME_TEXT = "👋 Добро пожаловать! Выберите действие:"
 CATEGORIES = ['Сайты', 'IT разработка', 'Нейросети', 'Дизайн', 'Маркетинг', 'Проектирование', 'Тендеры', 'Юристы']
@@ -41,7 +40,7 @@ def main_menu_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# Старт
+# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         WELCOME_TEXT,
@@ -123,7 +122,8 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("❌ Действие отменено.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
-# Telegram webhook init
+
+# Инициализация бота
 application = Application.builder().token(TOKEN).build()
 
 application.add_handler(CommandHandler('start', start))
@@ -143,23 +143,14 @@ order_conv = ConversationHandler(
 
 application.add_handler(order_conv)
 
-# Webhook route
-@app.route('/webhook', methods=['POST'])
-def webhook():
-    update = Update.de_json(request.get_json(force=True), application.bot)
-    application.update_queue.put_nowait(update)
-    return 'ok'
-
+# Flask для Render проверки
 @app.route('/')
 def index():
     return 'Bot is running!'
 
-# Установка webhook при старте
 if __name__ == '__main__':
-    async def set_webhook():
-        await application.bot.set_webhook(url=WEBHOOK_URL)
-
     import asyncio
-    asyncio.run(set_webhook())
 
+    loop = asyncio.get_event_loop()
+    loop.create_task(application.run_polling())
     app.run(host='0.0.0.0', port=10000)
