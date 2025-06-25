@@ -1,19 +1,15 @@
 import os
-from flask import Flask, request
+from fastapi import FastAPI, Request
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Application,
-    CommandHandler,
-    CallbackQueryHandler,
-    MessageHandler,
-    filters,
-    ContextTypes,
-    ConversationHandler,
+    Application, CommandHandler, CallbackQueryHandler,
+    MessageHandler, filters, ConversationHandler, ContextTypes
 )
+import uvicorn
 
-# Константы
+# Конфигурация
 TOKEN = os.getenv("BOT_TOKEN")
-WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL")  # Render сам задаёт этот URL
+WEBHOOK_URL = os.getenv("RENDER_EXTERNAL_URL")
 CHANNEL_USERNAME = "@free_time_money"
 
 CATEGORIES = [
@@ -24,14 +20,12 @@ CATEGORIES = [
 
 TITLE, DESCRIPTION, CATEGORY, BUDGET, CITY = range(5)
 
-# Flask app
-flask_app = Flask(__name__)
-
-# Telegram bot app
-app = Application.builder().token(TOKEN).build()
+# Инициализация FastAPI и Telegram
+app = FastAPI()
+bot_app = Application.builder().token(TOKEN).build()
 
 
-# ----------- Telegram handlers -----------
+# --------- Telegram Handlers ---------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -123,22 +117,22 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# ----------- Telegram webhook integration -----------
+# --------- Webhook ---------
 
-@flask_app.route('/')
-def home():
-    return "Bot is alive!"
-
-
-@flask_app.post(f'/{TOKEN}')
-async def webhook():
-    data = request.get_json(force=True)
-    update = Update.de_json(data, app.bot)
-    await app.process_update(update)
-    return 'ok'
+@app.get("/")
+async def root():
+    return {"status": "Bot is running"}
 
 
-# ----------- Setup handlers -----------
+@app.post(f"/{TOKEN}")
+async def telegram_webhook(req: Request):
+    data = await req.json()
+    update = Update.de_json(data, bot_app.bot)
+    await bot_app.process_update(update)
+    return {"ok": True}
+
+
+# --------- Handlers ---------
 
 conv_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(menu_handler, pattern="^place_order$")],
@@ -152,22 +146,21 @@ conv_handler = ConversationHandler(
     fallbacks=[CommandHandler("cancel", cancel)],
 )
 
-app.add_handler(CommandHandler("start", start))
-app.add_handler(CallbackQueryHandler(menu_handler))
-app.add_handler(conv_handler)
+bot_app.add_handler(CommandHandler("start", start))
+bot_app.add_handler(CallbackQueryHandler(menu_handler))
+bot_app.add_handler(conv_handler)
 
 
-# ----------- Start bot -----------
+# --------- Запуск ---------
 
-async def run_webhook():
-    await app.bot.set_webhook(f"{WEBHOOK_URL}/{TOKEN}")
-    print(f"Webhook set to {WEBHOOK_URL}/{TOKEN}")
+async def on_startup():
+    webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
+    await bot_app.bot.set_webhook(webhook_url)
+    print(f"Webhook установлен на {webhook_url}")
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import asyncio
+    asyncio.run(on_startup())
 
-    loop = asyncio.get_event_loop()
-    loop.run_until_complete(run_webhook())
-
-    flask_app.run(host="0.0.0.0", port=10000)
+    uvicorn.run(app, host="0.0.0.0", port=10000)
