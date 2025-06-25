@@ -6,7 +6,6 @@ from telegram.ext import (
     MessageHandler, filters, ConversationHandler, ContextTypes
 )
 import uvicorn
-import asyncio
 
 # Конфигурация
 TOKEN = os.getenv("BOT_TOKEN")
@@ -21,7 +20,6 @@ CATEGORIES = [
 
 TITLE, DESCRIPTION, CATEGORY, BUDGET, CITY = range(5)
 
-# Инициализация FastAPI и Telegram
 app = FastAPI()
 bot_app = Application.builder().token(TOKEN).build()
 
@@ -118,7 +116,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-# --------- Webhook ---------
+# --------- Webhook Handlers ---------
 
 @app.get("/")
 async def root():
@@ -129,17 +127,28 @@ async def root():
 async def telegram_webhook(req: Request):
     data = await req.json()
     update = Update.de_json(data, bot_app.bot)
-
-    # Инициализация приложения, если оно не инициализировано
-    if not bot_app.running:
-        await bot_app.initialize()
-        await bot_app.start()
-
     await bot_app.process_update(update)
     return {"ok": True}
 
 
-# --------- Handlers ---------
+# --------- Startup & Shutdown ---------
+
+@app.on_event("startup")
+async def on_startup():
+    await bot_app.initialize()
+    webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
+    await bot_app.bot.set_webhook(webhook_url)
+    await bot_app.start()
+    print(f"Webhook установлен на {webhook_url}")
+
+
+@app.on_event("shutdown")
+async def on_shutdown():
+    await bot_app.stop()
+    await bot_app.shutdown()
+
+
+# --------- Handlers Setup ---------
 
 conv_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(menu_handler, pattern="^place_order$")],
@@ -158,14 +167,7 @@ bot_app.add_handler(CallbackQueryHandler(menu_handler))
 bot_app.add_handler(conv_handler)
 
 
-# --------- Запуск ---------
-
-async def on_startup():
-    webhook_url = f"{WEBHOOK_URL}/{TOKEN}"
-    await bot_app.bot.set_webhook(webhook_url)
-    print(f"Webhook установлен на {webhook_url}")
-
+# --------- Run ---------
 
 if __name__ == "__main__":
-    asyncio.run(on_startup())
     uvicorn.run(app, host="0.0.0.0", port=10000)
