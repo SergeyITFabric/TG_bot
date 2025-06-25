@@ -6,6 +6,7 @@ from telegram.ext import (
     MessageHandler, filters, ConversationHandler, ContextTypes
 )
 import uvicorn
+import asyncio
 
 # Конфигурация
 TOKEN = os.getenv("BOT_TOKEN")
@@ -128,6 +129,12 @@ async def root():
 async def telegram_webhook(req: Request):
     data = await req.json()
     update = Update.de_json(data, bot_app.bot)
+
+    # Инициализация приложения, если оно не инициализировано
+    if not bot_app.running:
+        await bot_app.initialize()
+        await bot_app.start()
+
     await bot_app.process_update(update)
     return {"ok": True}
 
@@ -160,7 +167,5 @@ async def on_startup():
 
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(on_startup())
-
     uvicorn.run(app, host="0.0.0.0", port=10000)
