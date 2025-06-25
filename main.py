@@ -18,7 +18,7 @@ from telegram.ext import (
 )
 import os
 
-TOKEN = "ВАШ_ТОКЕН"
+TOKEN = "7642643259:AAErZAsn4qCzaRkArbuegI8EizGE8yRv1VU"
 CHANNEL_ID = "@free_time_money"
 
 app = FastAPI()
