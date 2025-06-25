@@ -1,6 +1,12 @@
-
+import os
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ReplyKeyboardRemove
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    Update,
+    ReplyKeyboardMarkup,
+    ReplyKeyboardRemove,
+)
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -13,23 +19,22 @@ from telegram.ext import (
 from flask import Flask
 import threading
 
-# Включаем логирование
+# Логирование
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
+# Переменные
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_USERNAME = "@free_time_money"
 
-# Категории
 CATEGORIES = [
     "Сайты", "IT разработка", "Нейросети",
     "Дизайн", "Маркетинг", "Проектирование",
     "Тендеры", "Юристы"
 ]
 
-# Состояния для ConversationHandler
 (
     ORDER_TITLE, ORDER_DESCRIPTION, ORDER_CATEGORY,
     ORDER_BUDGET, ORDER_CITY
@@ -47,12 +52,14 @@ def main_menu_keyboard():
     ]
     return InlineKeyboardMarkup(keyboard)
 
+# Старт
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Добро пожаловать! Выберите действие:",
         reply_markup=main_menu_keyboard()
     )
 
+# Обработка нажатий
 async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -61,21 +68,28 @@ async def menu_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "place_order":
         await query.message.reply_text("Введите заголовок заказа:", reply_markup=ReplyKeyboardRemove())
         return ORDER_TITLE
+
     elif data == "find_order":
         await query.message.reply_text("Функционал в разработке.")
+
     elif data == "resources":
         await query.message.reply_text("Функционал в разработке.")
+
     elif data == "referral":
         link = f"https://t.me/{context.bot.username}?start={query.from_user.id}"
-        await query.message.reply_text(f"Ваша реферальная ссылка:
-{link}")
+        await query.message.reply_text(
+            f"Ваша реферальная ссылка:\n{link}"
+        )
+
     elif data == "faq":
         await query.message.reply_text("Функционал в разработке.")
+
     elif data == "support":
         await query.message.reply_text("Функционал в разработке.")
+
     return ConversationHandler.END
 
-# Формирование заказа
+# Шаги создания заказа
 async def order_title(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["title"] = update.message.text
     await update.message.reply_text("Введите описание заказа:")
@@ -86,7 +100,7 @@ async def order_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[cat] for cat in CATEGORIES]
     await update.message.reply_text(
         "Выберите категорию:",
-        reply_markup=ReplyKeyboardRemove()
+        reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
     )
     return ORDER_CATEGORY
 
@@ -109,20 +123,15 @@ async def order_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     budget = context.user_data["budget"]
     city = context.user_data["city"]
 
-    text = (
-        f"📝 <b>Новый заказ</b>
+    text = f"""
+📝 <b>Новый заказ</b>
 
-"
-        f"<b>Заголовок:</b> {title}
-"
-        f"<b>Описание:</b> {description}
-"
-        f"<b>Категория:</b> #{category}
-"
-        f"<b>Бюджет / Часы:</b> {budget}
-"
-        f"<b>Город:</b> #{city}"
-    )
+<b>Заголовок:</b> {title}
+<b>Описание:</b> {description}
+<b>Категория:</b> #{category}
+<b>Бюджет / Часы:</b> {budget}
+<b>Город:</b> #{city}
+"""
 
     await context.bot.send_message(
         chat_id=CHANNEL_USERNAME,
@@ -133,6 +142,7 @@ async def order_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Ваш заказ опубликован!", reply_markup=main_menu_keyboard())
     return ConversationHandler.END
 
+# Отмена
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Действие отменено.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
@@ -147,7 +157,7 @@ def index():
 def run_flask():
     app.run(host="0.0.0.0", port=10000)
 
-# Основная функция запуска
+# Запуск бота
 async def main():
     application = Application.builder().token(TOKEN).build()
 
@@ -167,7 +177,6 @@ async def main():
     application.add_handler(CallbackQueryHandler(menu_callback))
     application.add_handler(order_conv)
 
-    # Запуск Flask в отдельном потоке
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.start()
 
