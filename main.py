@@ -1,61 +1,54 @@
 import logging
-import asyncio
+from flask import Flask, request
 from telegram import (
+    Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    Update,
     ReplyKeyboardMarkup,
-    ReplyKeyboardRemove
+    ReplyKeyboardRemove,
 )
 from telegram.ext import (
     Application,
     CommandHandler,
     CallbackQueryHandler,
     MessageHandler,
-    filters,
+    ContextTypes,
     ConversationHandler,
-    ContextTypes
+    filters,
 )
-from flask import Flask
 
-# ============ НАСТРОЙКИ ============
-TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN'
+TOKEN = 'YOUR_BOT_TOKEN'
 CHANNEL_USERNAME = '@YOUR_CHANNEL_USERNAME'
+WEBHOOK_URL = 'https://YOUR_RENDER_URL.onrender.com/webhook'
+
 WELCOME_TEXT = "👋 Добро пожаловать! Выберите действие:"
 CATEGORIES = ['Сайты', 'IT разработка', 'Нейросети', 'Дизайн', 'Маркетинг', 'Проектирование', 'Тендеры', 'Юристы']
 
-# ============ ЛОГИ ============
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ============ Flask ============
-app_flask = Flask(__name__)
+app = Flask(__name__)
 
-@app_flask.route("/")
-def hello():
-    return "Bot is running!"
-
-# ============ Состояния ============
+# Состояния
 TITLE, DESCRIPTION, CATEGORY, BUDGET, CITY = range(5)
 
-# ============ Кнопки меню ============
+# Клавиатура меню
 def main_menu_keyboard():
     keyboard = [
         [InlineKeyboardButton("📢 Разместить заказ", callback_data="order")],
         [InlineKeyboardButton("👨‍💻 Отклики на заказы", callback_data="responses")],
-        [InlineKeyboardButton("ℹ️ Помощь", callback_data="help")]
+        [InlineKeyboardButton("ℹ️ Помощь", callback_data="help")],
     ]
     return InlineKeyboardMarkup(keyboard)
 
-# ============ Хендлеры ============
+# Старт
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        text=WELCOME_TEXT,
+        WELCOME_TEXT,
         reply_markup=main_menu_keyboard()
     )
 
+# Обработка кнопок меню
 async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -70,15 +63,15 @@ async def handle_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-# ============ Сбор данных ============
+# Сбор данных заказа
 async def title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["title"] = update.message.text
+    context.user_data['title'] = update.message.text
     await update.message.reply_text("Введите описание заказа:")
     return DESCRIPTION
 
 async def description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["description"] = update.message.text
-    keyboard = [[category] for category in CATEGORIES]
+    context.user_data['description'] = update.message.text
+    keyboard = [[c] for c in CATEGORIES]
     await update.message.reply_text(
         "Выберите категорию:",
         reply_markup=ReplyKeyboardMarkup(keyboard, one_time_keyboard=True, resize_keyboard=True)
@@ -86,25 +79,25 @@ async def description(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return CATEGORY
 
 async def category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["category"] = update.message.text
+    context.user_data['category'] = update.message.text
     await update.message.reply_text("Укажите бюджет или часы работы:")
     return BUDGET
 
 async def budget(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["budget"] = update.message.text
+    context.user_data['budget'] = update.message.text
     await update.message.reply_text("Укажите город:")
     return CITY
 
 async def city(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["city"] = update.message.text
+    context.user_data['city'] = update.message.text
 
-    title = context.user_data["title"]
-    description = context.user_data["description"]
-    category = context.user_data["category"]
-    budget = context.user_data["budget"]
-    city = context.user_data["city"]
+    title = context.user_data['title']
+    description = context.user_data['description']
+    category = context.user_data['category']
+    budget = context.user_data['budget']
+    city = context.user_data['city']
 
-    post_text = (
+    post = (
         f"📝 <b>{title}</b>\n\n"
         f"{description}\n\n"
         f"💼 Категория: <b>{category}</b>\n"
@@ -115,42 +108,58 @@ async def city(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await context.bot.send_message(
         chat_id=CHANNEL_USERNAME,
-        text=post_text,
-        parse_mode="HTML"
+        text=post,
+        parse_mode='HTML'
     )
 
-    await update.message.reply_text("✅ Заказ опубликован в канале!", reply_markup=main_menu_keyboard())
+    await update.message.reply_text(
+        "✅ Заказ опубликован!",
+        reply_markup=main_menu_keyboard()
+    )
 
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Действие отменено.", reply_markup=ReplyKeyboardRemove())
+    await update.message.reply_text("❌ Действие отменено.", reply_markup=ReplyKeyboardRemove())
     return ConversationHandler.END
 
-# ============ Запуск ============
-async def main():
-    app = Application.builder().token(TOKEN).build()
+# Telegram webhook init
+application = Application.builder().token(TOKEN).build()
 
-    app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(handle_menu))
+application.add_handler(CommandHandler('start', start))
+application.add_handler(CallbackQueryHandler(handle_menu))
 
-    order_conv = ConversationHandler(
-        entry_points=[CallbackQueryHandler(handle_menu, pattern="^order$")],
-        states={
-            TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, title)],
-            DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, description)],
-            CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, category)],
-            BUDGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, budget)],
-            CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, city)],
-        },
-        fallbacks=[CommandHandler("cancel", cancel)],
-    )
-    app.add_handler(order_conv)
+order_conv = ConversationHandler(
+    entry_points=[CallbackQueryHandler(handle_menu, pattern="^order$")],
+    states={
+        TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, title)],
+        DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, description)],
+        CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, category)],
+        BUDGET: [MessageHandler(filters.TEXT & ~filters.COMMAND, budget)],
+        CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, city)],
+    },
+    fallbacks=[CommandHandler("cancel", cancel)],
+)
 
-    print("🤖 Бот запущен...")
-    await app.run_polling()
+application.add_handler(order_conv)
 
-if __name__ == "__main__":
-    loop = asyncio.get_event_loop()
-    loop.create_task(main())
-    app_flask.run(host="0.0.0.0", port=10000)
+# Webhook route
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    update = Update.de_json(request.get_json(force=True), application.bot)
+    application.update_queue.put_nowait(update)
+    return 'ok'
+
+@app.route('/')
+def index():
+    return 'Bot is running!'
+
+# Установка webhook при старте
+if __name__ == '__main__':
+    async def set_webhook():
+        await application.bot.set_webhook(url=WEBHOOK_URL)
+
+    import asyncio
+    asyncio.run(set_webhook())
+
+    app.run(host='0.0.0.0', port=10000)
