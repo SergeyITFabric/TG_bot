@@ -1,34 +1,33 @@
-import os
-from fastapi import FastAPI, Request
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
-)
+
+import logging
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler, MessageHandler,
-    ConversationHandler, ContextTypes, filters
+    Application, CallbackQueryHandler, CommandHandler, ContextTypes,
+    ConversationHandler, MessageHandler, filters
 )
-from telegram.constants import ParseMode
+from fastapi import FastAPI, Request
+import uvicorn
+import asyncio
+import os
 
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = "@free_time_money"
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # Пример: https://your-app.onrender.com
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
 
-application = Application.builder().token(TOKEN).build()
+(ASK_TITLE, ASK_DESCRIPTION, ASK_CATEGORY, ASK_PRICE, ASK_CITY) = range(5)
 
-# Этапы заполнения заказа
-TITLE, DESCRIPTION, CATEGORY, PRICE, CITY = range(5)
-
-CATEGORIES = [
+categories = [
     "Сайты", "IT разработка", "Нейросети", "Дизайн",
     "Маркетинг", "Проектирование", "Тендеры", "Юристы"
 ]
 
-# -------- Меню --------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton("Разместить Заказ", callback_data="new_order")],
+        [InlineKeyboardButton("Разместить Заказ", callback_data="create_order")],
         [InlineKeyboardButton("Найти Заказ. Категории", callback_data="find_order")],
         [InlineKeyboardButton("Ресурсы: Аренда. Прокат. Рабочие.", callback_data="resources")],
         [InlineKeyboardButton("Реферальная программа", callback_data="referral")],
@@ -36,126 +35,111 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("Служба заботы", callback_data="support")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Меню", reply_markup=reply_markup)
+    await update.message.reply_text('Выберите действие:', reply_markup=reply_markup)
 
-# -------- Кнопки меню --------
-async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data == "new_order":
+    if query.data == "create_order":
         await query.message.reply_text("Введите заголовок заказа:")
-        return TITLE
+        return ASK_TITLE
+    else:
+        await query.message.reply_text("Этот раздел в разработке.")
+        return ConversationHandler.END
 
-    elif query.data == "find_order":
-        await query.message.reply_text("Функция в разработке.")
-    elif query.data == "resources":
-        await query.message.reply_text("Раздел ресурсов в разработке.")
-    elif query.data == "referral":
-        link = await context.bot.create_chat_invite_link(chat_id=CHANNEL_ID)
-        await query.message.reply_text(
-            f"Ваша реферальная ссылка:\n{link.invite_link}"
-        )
-    elif query.data == "faq":
-        await query.message.reply_text("Раздел FAQ в разработке.")
-    elif query.data == "support":
-        await query.message.reply_text("Служба заботы: @username_support")
-
-    return ConversationHandler.END
-
-# -------- Форма заказа --------
-async def title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['title'] = update.message.text
+async def ask_description(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["title"] = update.message.text
     await update.message.reply_text("Введите описание заказа:")
-    return DESCRIPTION
+    return ASK_DESCRIPTION
 
-
-async def description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['description'] = update.message.text
-    keyboard = [[InlineKeyboardButton(cat, callback_data=cat)] for cat in CATEGORIES]
+async def ask_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["description"] = update.message.text
+    keyboard = [[InlineKeyboardButton(cat, callback_data=cat)] for cat in categories]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
-    return CATEGORY
+    return ASK_CATEGORY
 
-
-async def category(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def save_category(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    context.user_data['category'] = query.data
-    await query.message.reply_text("Введите бюджет заказа (например: 5000 руб):")
-    return PRICE
+    context.user_data["category"] = query.data
+    await query.message.reply_text("Введите бюджет заказа:")
+    return ASK_PRICE
 
-
-async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['price'] = update.message.text
+async def ask_city(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["price"] = update.message.text
     await update.message.reply_text("Введите город:")
-    return CITY
+    return ASK_CITY
 
+async def publish_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    context.user_data["city"] = update.message.text
+    title = context.user_data["title"]
+    description = context.user_data["description"]
+    category = context.user_data["category"]
+    price = context.user_data["price"]
+    city = context.user_data["city"]
 
-async def city(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['city'] = update.message.text
+    text = (
+        f"📝 <b>Новый заказ</b>
+"
+        f"<b>Заголовок:</b> {title}
+"
+        f"<b>Описание:</b> {description}
+"
+        f"<b>Категория:</b> {category}
+"
+        f"<b>Бюджет:</b> {price}
+"
+        f"<b>Город:</b> {city}
 
-    order_text = (
-        f"<b>📝 Новый заказ</b>\n\n"
-        f"<b>Заголовок:</b> {context.user_data['title']}\n"
-        f"<b>Описание:</b> {context.user_data['description']}\n"
-        f"<b>Категория:</b> {context.user_data['category']}\n"
-        f"<b>Бюджет:</b> {context.user_data['price']}\n"
-        f"<b>Город:</b> {context.user_data['city']}"
+"
+        f"#{category.replace(' ', '_')} #{city.replace(' ', '_')}"
     )
 
-    await context.bot.send_message(
-        chat_id=CHANNEL_ID,
-        text=order_text,
-        parse_mode=ParseMode.HTML
-    )
-
-    await update.message.reply_text("Ваш заказ опубликован в канале!")
+    await context.bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML")
+    await update.message.reply_text("Ваш заказ опубликован!")
     return ConversationHandler.END
-
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("Отменено.")
     return ConversationHandler.END
 
-
-# -------- Handlers --------
-conv_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(menu_handler, pattern="^new_order$")],
-    states={
-        TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, title)],
-        DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, description)],
-        CATEGORY: [CallbackQueryHandler(category)],
-        PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, price)],
-        CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, city)],
-    },
-    fallbacks=[CommandHandler("cancel", cancel)],
-)
-
-application.add_handler(CommandHandler("start", start))
-application.add_handler(conv_handler)
-application.add_handler(CallbackQueryHandler(menu_handler))
-
-# -------- FastAPI --------
 @app.on_event("startup")
-async def on_startup():
-    await application.bot.set_webhook(f"{WEBHOOK_URL}/{TOKEN}")
-
+async def startup_event():
+    asyncio.create_task(bot_app.initialize())
+    await bot_app.bot.set_webhook(url=WEBHOOK_URL)
 
 @app.on_event("shutdown")
-async def on_shutdown():
-    await application.bot.delete_webhook()
-
+async def shutdown_event():
+    await bot_app.shutdown()
 
 @app.post(f"/{TOKEN}")
 async def telegram_webhook(req: Request):
     data = await req.json()
-    update = Update.de_json(data, application.bot)
-    await application.update_queue.put(update)
-    return "OK"
+    update = Update.de_json(data, bot_app.bot)
+    await bot_app.process_update(update)
+    return {"ok": True}
 
+bot_app = Application.builder().token(TOKEN).build()
 
-# -------- Запуск --------
+conv_handler = ConversationHandler(
+    entry_points=[CallbackQueryHandler(button, pattern="^create_order$")],
+    states={
+        ASK_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_description)],
+        ASK_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_category)],
+        ASK_CATEGORY: [CallbackQueryHandler(save_category)],
+        ASK_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, ask_city)],
+        ASK_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, publish_order)]
+    },
+    fallbacks=[CommandHandler("cancel", cancel)]
+)
+
+bot_app.add_handler(CommandHandler("start", start))
+bot_app.add_handler(conv_handler)
+bot_app.add_handler(CallbackQueryHandler(button))
+
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=10000)
+    uvicorn.run(app, host="0.0.0.0", port=10000)
