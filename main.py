@@ -1,25 +1,20 @@
 import os
 from fastapi import FastAPI, Request
-from telegram import Update, BotCommand
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, filters,
     CallbackQueryHandler, ContextTypes, ConversationHandler
 )
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 TOKEN = os.getenv('BOT_TOKEN')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')  # Например, https://tg-bot-abc.onrender.com
-
+WEBHOOK_URL = os.getenv('WEBHOOK_URL')
 CHANNEL_USERNAME = '@free_time_money'
 
-# Создание приложения Telegram
 bot_app = Application.builder().token(TOKEN).build()
-
-# Создание FastAPI
 app = FastAPI()
 
 # ====================
-# === Меню для бота ===
+# === Меню ===
 # ====================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -34,10 +29,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text('Добро пожаловать! Выберите действие:', reply_markup=reply_markup)
 
+# ======================
+# === Обработка кнопок ===
+# ======================
 
-# ============================
-# === Обработчик Callbacks ====
-# ============================
+TITLE, DESCRIPTION, CATEGORY, PRICE, CITY = range(5)
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -65,12 +61,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-
-# ===============================
-# === Конструктор заказа ====
-# ===============================
-
-TITLE, DESCRIPTION, CATEGORY, PRICE, CITY = range(5)
+# ======================
+# === Форма заказа ===
+# ======================
 
 async def title(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['title'] = update.message.text
@@ -109,15 +102,13 @@ async def city(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
-
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text('Операция отменена.')
     return ConversationHandler.END
 
-
-# ===============================
-# === Регистрация handlers ====
-# ===============================
+# =========================
+# === Регистрация хендлеров ===
+# =========================
 
 conv_handler = ConversationHandler(
     entry_points=[CallbackQueryHandler(button_handler, pattern='place_order')],
@@ -135,22 +126,23 @@ bot_app.add_handler(CommandHandler('start', start))
 bot_app.add_handler(CallbackQueryHandler(button_handler))
 bot_app.add_handler(conv_handler)
 
-
-# ==========================
+# =========================
 # === Вебхук и запуск ====
-# ==========================
+# =========================
 
 @app.on_event("startup")
 async def on_startup():
     webhook_path = f"/{TOKEN}"
+    await bot_app.initialize()
+    await bot_app.start()
     await bot_app.bot.set_webhook(url=WEBHOOK_URL + webhook_path)
     print(f"Webhook установлен на {WEBHOOK_URL + webhook_path}")
-
 
 @app.on_event("shutdown")
 async def on_shutdown():
     await bot_app.bot.delete_webhook()
-
+    await bot_app.stop()
+    await bot_app.shutdown()
 
 @app.post(f"/{TOKEN}")
 async def telegram_webhook(req: Request):
@@ -159,8 +151,7 @@ async def telegram_webhook(req: Request):
     await bot_app.update_queue.put(update)
     return {"ok": True}
 
-
-# Точка входа локально
+# Для локального запуска
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=10000)
