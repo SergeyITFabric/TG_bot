@@ -1,157 +1,147 @@
-import os
-from fastapi import FastAPI, Request
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
+
+import logging
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
-    Application, CommandHandler, MessageHandler, filters,
-    CallbackQueryHandler, ContextTypes, ConversationHandler
+    Application,
+    CommandHandler,
+    CallbackQueryHandler,
+    MessageHandler,
+    ConversationHandler,
+    filters,
+    ContextTypes,
 )
+from fastapi import FastAPI, Request
+import uvicorn
 
-TOKEN = os.getenv('BOT_TOKEN')
-WEBHOOK_URL = os.getenv('WEBHOOK_URL')
-CHANNEL_USERNAME = '@free_time_money'
+TOKEN = "ВАШ_ТОКЕН_БОТА"
+CHANNEL_ID = "@free_time_money"
 
-bot_app = Application.builder().token(TOKEN).build()
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 app = FastAPI()
+bot_app = Application.builder().token(TOKEN).build()
 
-# ====================
-# === Меню ===
-# ====================
+(ORDER_TITLE, ORDER_DESCRIPTION, ORDER_CATEGORY, ORDER_PRICE, ORDER_CITY) = range(5)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+CATEGORIES = [
+    "Сайты",
+    "IT разработка",
+    "Нейросети",
+    "Дизайн",
+    "Маркетинг",
+    "Проектирование",
+    "Тендеры",
+    "Юристы",
+]
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = [
-        [InlineKeyboardButton("Разместить Заказ", callback_data='place_order')],
-        [InlineKeyboardButton("Найти Заказ. Категории", callback_data='find_order')],
-        [InlineKeyboardButton("Ресурсы: Аренда. Прокат. Рабочие.", callback_data='resources')],
-        [InlineKeyboardButton("Реферальная программа", callback_data='referral')],
-        [InlineKeyboardButton("Вопросы и ответы", callback_data='faq')],
-        [InlineKeyboardButton("Служба заботы", callback_data='support')],
+        [InlineKeyboardButton("Разместить Заказ", callback_data="order")],
+        [InlineKeyboardButton("Найти Заказ. Категории", callback_data="categories")],
+        [InlineKeyboardButton("Ресурсы: Аренда. Прокат. Рабочие.", callback_data="resources")],
+        [InlineKeyboardButton("Реферальная программа", callback_data="referral")],
+        [InlineKeyboardButton("Вопросы и ответы", callback_data="faq")],
+        [InlineKeyboardButton("Служба заботы", callback_data="support")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text('Добро пожаловать! Выберите действие:', reply_markup=reply_markup)
+    await update.message.reply_text("Меню", reply_markup=reply_markup)
 
-# ======================
-# === Обработка кнопок ===
-# ======================
-
-TITLE, DESCRIPTION, CATEGORY, PRICE, CITY = range(5)
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
 
-    if query.data == 'place_order':
-        await query.message.reply_text('Введите заголовок заказа:')
-        return TITLE
+    if query.data == "order":
+        await query.message.reply_text("Введите заголовок заказа:")
+        return ORDER_TITLE
 
-    elif query.data == 'find_order':
-        await query.message.reply_text('Функция поиска заказа в разработке.')
-
-    elif query.data == 'resources':
-        await query.message.reply_text('Ресурсы: аренда, прокат, рабочие.')
-
-    elif query.data == 'referral':
-        referral_link = f"https://t.me/{context.bot.username}?start={query.from_user.id}"
-        await query.message.reply_text(f"Ваша реферальная ссылка: {referral_link}")
-
-    elif query.data == 'faq':
-        await query.message.reply_text('Здесь будут часто задаваемые вопросы.')
-
-    elif query.data == 'support':
-        await query.message.reply_text('Напишите в поддержку @YourSupportUsername')
-
+    await query.message.reply_text("Этот раздел пока в разработке.")
     return ConversationHandler.END
 
-# ======================
-# === Форма заказа ===
-# ======================
+async def order_title(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["title"] = update.message.text
+    await update.message.reply_text("Введите описание заказа:")
+    return ORDER_DESCRIPTION
 
-async def title(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['title'] = update.message.text
-    await update.message.reply_text('Введите описание заказа:')
-    return DESCRIPTION
+async def order_description(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["description"] = update.message.text
+    keyboard = [[InlineKeyboardButton(cat, callback_data=cat)] for cat in CATEGORIES]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    await update.message.reply_text("Выберите категорию:", reply_markup=reply_markup)
+    return ORDER_CATEGORY
 
-async def description(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['description'] = update.message.text
-    await update.message.reply_text('Введите категорию заказа:')
-    return CATEGORY
+async def order_category(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    query = update.callback_query
+    await query.answer()
+    context.user_data["category"] = query.data
+    await query.message.reply_text("Укажите цену заказа (например: 5000 руб):")
+    return ORDER_PRICE
 
-async def category(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['category'] = update.message.text
-    await update.message.reply_text('Введите бюджет заказа:')
-    return PRICE
+async def order_price(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["price"] = update.message.text
+    await update.message.reply_text("Укажите город:")
+    return ORDER_CITY
 
-async def price(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['price'] = update.message.text
-    await update.message.reply_text('Введите город:')
-    return CITY
+async def order_city(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    context.user_data["city"] = update.message.text
 
-async def city(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data['city'] = update.message.text
+    text = (
+        f"📝 <b>Новый заказ</b>
 
-    order_text = (
-        f"📝 <b>Новый заказ</b>\n\n"
-        f"<b>Заголовок:</b> {context.user_data['title']}\n"
-        f"<b>Описание:</b> {context.user_data['description']}\n"
-        f"<b>Категория:</b> {context.user_data['category']}\n"
-        f"<b>Бюджет:</b> {context.user_data['price']}\n"
+"
+        f"<b>Заголовок:</b> {context.user_data['title']}
+"
+        f"<b>Описание:</b> {context.user_data['description']}
+"
+        f"<b>Категория:</b> {context.user_data['category']}
+"
+        f"<b>Цена:</b> {context.user_data['price']}
+"
         f"<b>Город:</b> {context.user_data['city']}"
     )
 
-    await context.bot.send_message(chat_id=CHANNEL_USERNAME, text=order_text, parse_mode='HTML')
-    await update.message.reply_text('Ваш заказ размещен!')
-
+    await bot_app.bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML")
+    await update.message.reply_text("Ваш заказ опубликован.")
     return ConversationHandler.END
 
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text('Операция отменена.')
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    await update.message.reply_text("Отменено.")
     return ConversationHandler.END
-
-# =========================
-# === Регистрация хендлеров ===
-# =========================
 
 conv_handler = ConversationHandler(
-    entry_points=[CallbackQueryHandler(button_handler, pattern='place_order')],
+    entry_points=[CallbackQueryHandler(button_handler, pattern="^order$")],
     states={
-        TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, title)],
-        DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, description)],
-        CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, category)],
-        PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, price)],
-        CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, city)],
+        ORDER_TITLE: [MessageHandler(filters.TEXT & ~filters.COMMAND, order_title)],
+        ORDER_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, order_description)],
+        ORDER_CATEGORY: [CallbackQueryHandler(order_category)],
+        ORDER_PRICE: [MessageHandler(filters.TEXT & ~filters.COMMAND, order_price)],
+        ORDER_CITY: [MessageHandler(filters.TEXT & ~filters.COMMAND, order_city)],
     },
-    fallbacks=[CommandHandler('cancel', cancel)],
+    fallbacks=[CommandHandler("cancel", cancel)],
 )
 
-bot_app.add_handler(CommandHandler('start', start))
+bot_app.add_handler(CommandHandler("start", start))
 bot_app.add_handler(CallbackQueryHandler(button_handler))
 bot_app.add_handler(conv_handler)
 
-# =========================
-# === Вебхук и запуск ====
-# =========================
-
 @app.on_event("startup")
-async def on_startup():
-    webhook_path = f"/{TOKEN}"
-    await bot_app.initialize()
-    await bot_app.start()
-    await bot_app.bot.set_webhook(url=WEBHOOK_URL + webhook_path)
-    print(f"Webhook установлен на {WEBHOOK_URL + webhook_path}")
+async def startup_event():
+    await bot_app.bot.set_webhook("https://tg-bot-hvfu.onrender.com/" + TOKEN)
 
 @app.on_event("shutdown")
-async def on_shutdown():
+async def shutdown_event():
     await bot_app.bot.delete_webhook()
-    await bot_app.stop()
-    await bot_app.shutdown()
 
-@app.post(f"/{TOKEN}")
-async def telegram_webhook(req: Request):
-    data = await req.json()
+@app.post("/" + TOKEN)
+async def telegram_webhook(request: Request):
+    data = await request.json()
     update = Update.de_json(data, bot_app.bot)
-    await bot_app.update_queue.put(update)
+    await bot_app.process_update(update)
     return {"ok": True}
 
-# Для локального запуска
+@app.get("/")
+async def root():
+    return {"status": "bot is running"}
+
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=10000)
